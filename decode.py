@@ -111,7 +111,7 @@ def ints21hot(int_sents, nclasses, max_length):
         return sents_1hot
 
 
-infile_path = "/home/sakakini/adr-detection/datasets/ADE_NER_Meds.txt"
+infile_path = "/home/sakakini/adr-detection-parent/large-files/datasets/ADE_NER_Meds.txt"
 latent_dim = 256
 batch_size = 1000
 epochs = 10

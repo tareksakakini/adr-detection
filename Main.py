@@ -76,8 +76,8 @@ def ints21hot(int_sents, nclasses, max_length):
 			sents_1hot[i,j,int_] = 1.0 
 	return sents_1hot
 		
-wv_model = KeyedVectors.load_word2vec_format('/home/sakakini/adr-detection/word_vectors/PubMed-and-PMC-w2v.bin', binary=True)
-infile_path = "/home/sakakini/adr-detection/datasets/ADE_NER_Meds.txt"
+wv_model = KeyedVectors.load_word2vec_format('/home/sakakini/adr-detection-parent/large-files/word_vectors/PubMed-and-PMC-w2v.bin', binary=True)
+infile_path = "/home/sakakini/adr-detection-parent/large-files/datasets/ADE_NER_Meds.txt"
 latent_dim = 256
 batch_size = 1000
 epochs = 300
@@ -105,20 +105,16 @@ target_sents_1hot = ints21hot(target_sents_ints, target_vocab_size, max_length)
 
 model_input_source = Input(shape = (max_length,), dtype='int32')
 model_input_target = Input(shape = (max_length,), dtype='int32')
-#embedding_layer_trainable = Embedding(output_dim=200, input_dim=source_vocab_size)
 embedding_layer_fixed = Embedding(source_vocab_size, 200, weights = [emb_matrix], trainable=False)
 embedding_layer_target = Embedding(output_dim=30, input_dim=target_vocab_size)
 source_embedding_fixed = embedding_layer_fixed(model_input_source)
 target_embedding = embedding_layer_target(model_input_target)
-#source_embedding_trainable = embedding_layer_trainable(model_input)
-#source_embedding = concatenate([source_embedding_fixed, source_embedding_trainable])
-lstm_input = concatenate([source_embedding_fixed, target_embedding])
 LSTM_layer= LSTM(latent_dim, return_sequences = True, return_state = True)
-lstm_output, h, c = LSTM_layer(lstm_input)
+lstm_output, h, c = LSTM_layer(source_embedding_fixed)
 dense_layer = Dense(target_vocab_size, activation='softmax')
-prediction = dense_layer(lstm_output)
+dense_input = concatenate([lstm_output, target_embedding])
+prediction = dense_layer(dense_input)
 model = Model(inputs = [model_input_source, model_input_target], outputs = [prediction])
-#model = multi_gpu_model(model, gpus=2)
 optimizer = RMSprop(lr=0.0005)
 model.compile(optimizer=optimizer, loss='categorical_crossentropy')
 model.fit([np.array(source_sents_ints), np.array(target_sents_ints_delayed)], [np.array(target_sents_1hot)], batch_size=batch_size, epochs=epochs, validation_split=0.2)
@@ -132,10 +128,11 @@ decoder_word_input = Input(shape=(1,))
 decoder_tag_input = Input(shape=(1,))
 decoder_word_embedding = embedding_layer_fixed(decoder_word_input)
 decoder_tag_embedding = embedding_layer_target(decoder_tag_input)
-decoder_lstm_input = concatenate([decoder_word_embedding,decoder_tag_embedding])
+#decoder_lstm_input = concatenate([decoder_word_embedding,decoder_tag_embedding])
 decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
-decoder_outputs, state_h, state_c = LSTM_layer(decoder_lstm_input, initial_state=decoder_states_inputs)
+decoder_outputs, state_h, state_c = LSTM_layer(decoder_word_embedding, initial_state=decoder_states_inputs)
 decoder_states = [state_h, state_c]
-decoder_outputs = dense_layer(decoder_outputs)
-decoder_model = Model([decoder_word_input, decoder_tag_input] + decoder_states_inputs,[decoder_outputs] + decoder_states)
+decoder_dense_input = concatenate([decoder_outputs,decoder_tag_embedding])
+decoder_dense_outputs = dense_layer(decoder_dense_input)
+decoder_model = Model([decoder_word_input, decoder_tag_input] + decoder_states_inputs,[decoder_dense_outputs] + decoder_states)
 decoder_model.save("decoder.h5")
