@@ -45,9 +45,8 @@ def sent2tags(sent_index):
 			break
 	return tag_seq
 	 
+def evaluate_full(indices_range, tag_list):
 
-
-def evaluate(indices_range):
 	TP = 0.0
 	FP = 0.0
 	FN = 0.0
@@ -55,17 +54,56 @@ def evaluate(indices_range):
 	for ind in indices_range:
 		predicted_seq = sent2tags(ind)
 		gold_seq = target_sents[ind][1:]
-		B_M_gold = set([t for t,j in enumerate(gold_seq) if j == "B-M"])
-		I_M_gold = set([t for t,j in enumerate(gold_seq) if j == "I-M"])
-		B_M_pred = set([t for t,j in enumerate(predicted_seq) if j == "B-M"])
-		I_M_pred = set([t for t,j in enumerate(predicted_seq) if j == "I-M"])
-		TP += (len(B_M_gold & B_M_pred) + len(I_M_gold & I_M_pred))
-		FP += (len(B_M_gold - B_M_pred) + len(I_M_gold - I_M_pred))
-		FN += (len(B_M_pred - B_M_gold) + len(I_M_pred - I_M_gold))
+		predicted_ents = seq2ent(predicted_seq)
+		gold_ents = seq2ent(gold_seq)
+		TP += len(gold_ents & predicted_ents)
+		FP += len(gold_ents - predicted_ents)
+		FN += len(predicted_ents - gold_ents)
 	P = TP/(TP+FP+eps)
 	R = TP/(TP+FN+eps)
 	F = (2*P*R)/(P+R+eps)
 	print(P,R,F)
+
+def evaluate(indices_range, tag_list):
+	TP = 0.0
+	FP = 0.0
+	FN = 0.0
+	eps = 0.00001
+	for ind in indices_range:
+		predicted_seq = sent2tags(ind)
+		gold_seq = target_sents[ind][1:]
+		#print("Predicted Sequence:", predicted_seq)
+		#print("Gold Sequence:", gold_seq)
+		#print("Predicted ents:", seq2ent(predicted_seq))
+		#print("Gold ents:", seq2ent(gold_seq))
+		#print("Scores before (TP,FP,FN)", TP, FP, FN)
+		for tag in tag_list:
+			tag_gold = set([t for t,j in enumerate(gold_seq) if j == tag])
+			tag_pred = set([t for t,j in enumerate(predicted_seq) if j == tag])
+			TP += len(tag_gold & tag_pred)
+			FP += len(tag_gold - tag_pred)
+			FN += len(tag_pred - tag_gold)
+		#print("Scores after (TP,FP,FN)", TP, FP, FN)
+	P = TP/(TP+FP+eps)
+	R = TP/(TP+FN+eps)
+	F = (2*P*R)/(P+R+eps)
+	print(P,R,F)
+
+def seq2ent(seq):
+	ents = []
+	ent_start_flag = False
+	ent_type = None
+	ent_start = 0
+	ent_end = 0
+	for i,tag in enumerate(seq):
+		if tag[0] == "B":
+			ent_start = i
+			ent_type = tag[-1]
+			ent_start_flag = True
+		elif tag == "O" and ent_start_flag:
+			ents.append((ent_type,ent_start,i))
+			ent_start_flag = False
+	return set(ents)
 	
 def read_data(infile_path):
         infile = open(infile_path)
@@ -111,7 +149,7 @@ def ints21hot(int_sents, nclasses, max_length):
         return sents_1hot
 
 
-infile_path = "/home/sakakini/adr-detection-parent/large-files/datasets/ADE_NER_Meds.txt"
+infile_path = "/home/sakakini/adr-detection-parent/large-files/datasets/ADE_NER_All.txt"
 latent_dim = 256
 batch_size = 1000
 epochs = 10
@@ -136,8 +174,16 @@ target_sents_1hot = ints21hot(target_sents_ints, target_vocab_size + 1, max_leng
 
 decoder_model = load_model("decoder.h5")
 
+tag_list = list(target_vocab.keys())
+tag_list.remove('O')
+tag_list.remove('<PAD>')
+
+train_size = int(0.8*len(source_sents))
+test_size = len(source_sents) - train_size
+
+print(train_size, test_size)
 
 print("Evaluation data scores:")
-evaluate(range(4981,6227))
+evaluate_full(range(train_size,train_size+test_size), tag_list)
 print("Training data scores:")
-evaluate(range(0,4981))
+evaluate_full(range(0,train_size), tag_list)

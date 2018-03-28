@@ -77,7 +77,7 @@ def ints21hot(int_sents, nclasses, max_length):
 	return sents_1hot
 		
 wv_model = KeyedVectors.load_word2vec_format('/home/sakakini/adr-detection-parent/large-files/word_vectors/PubMed-and-PMC-w2v.bin', binary=True)
-infile_path = "/home/sakakini/adr-detection-parent/large-files/datasets/ADE_NER_Meds.txt"
+infile_path = "/home/sakakini/adr-detection-parent/large-files/datasets/ADE_NER_All.txt"
 latent_dim = 256
 batch_size = 1000
 epochs = 300
