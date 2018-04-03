@@ -1,5 +1,5 @@
 from keras.models import Model
-from keras.layers import Input, Embedding, LSTM, Dense, TimeDistributed, Dropout, concatenate
+from keras.layers import *
 from keras.utils import to_categorical, multi_gpu_model
 from keras.optimizers import RMSprop
 from keras.metrics import categorical_accuracy
@@ -75,13 +75,42 @@ def ints21hot(int_sents, nclasses, max_length):
 		for j,int_ in enumerate(int_sent):
 			sents_1hot[i,j,int_] = 1.0 
 	return sents_1hot
-		
+
+def word_ints_2_char_ints(sent_ints, vocab):
+	int2word = dict((index, word) for word, index in vocab.items())
+	word_max_len = max([len(word) for word, index in vocab.items()])
+	new_vocab = {}
+	for word in vocab:
+		new_word = word + "@"*(word_max_len - len(word))
+		new_vocab[new_word] = vocab[word]
+	int2word_new = dict((index, word) for word, index in new_vocab.items())
+	char_vocab = {}
+	i = 0
+	for word in new_vocab.keys():
+		for char in word:
+			if char not in char_vocab:
+				char_vocab[char] = i
+				i += 1
+	char_ints = []
+	for sent_int in sent_ints:
+		all_sent = []
+		for word_int in sent_int:
+			all_word = []
+			word = int2word_new[word_int]
+			for char in word:
+				all_word.append(char_vocab[char])
+			all_sent.append(all_word)
+		char_ints.append(all_sent)
+	return (char_ints, word_max_len, char_vocab)
+	
 wv_model = KeyedVectors.load_word2vec_format('/home/sakakini/adr-detection-parent/large-files/word_vectors/PubMed-and-PMC-w2v.bin', binary=True)
 infile_path = "/home/sakakini/adr-detection-parent/large-files/datasets/ADE_NER_All.txt"
 latent_dim = 256
 batch_size = 1000
 epochs = 300
 n_instances = 10000
+char_emb_size = 25
+window_size = 7
 
 (source_sents, target_sents) = read_data(infile_path)
 source_sents = source_sents[:n_instances]
@@ -90,6 +119,9 @@ source_vocab = collect_vocab(source_sents)
 target_vocab = collect_vocab(target_sents)
 source_sents_ints = sents2ints(source_sents, source_vocab)
 target_sents_ints_delayed = sents2ints(target_sents, target_vocab)
+
+(source_char_ints, max_word_len, char_vocab) = word_ints_2_char_ints(source_sents_ints, source_vocab)
+char_vocab_size = len(char_vocab.keys())
 
 target_sents_ints = [sent[1:] for sent in target_sents_ints_delayed]
 target_sents_ints_delayed = [sent[:-1] for sent in target_sents_ints_delayed]
@@ -103,36 +135,68 @@ max_length = max([len(x) for x in target_sents_ints])
 
 target_sents_1hot = ints21hot(target_sents_ints, target_vocab_size, max_length)
 
+model_input_source_chars = Input(shape = (max_length, max_word_len), dtype='int32')
+embedding_layer_char = Embedding(char_vocab_size, char_emb_size)
+conv_layer = Conv2D(char_emb_size, window_size, padding='same', activation = 'tanh', data_format = 'channels_last')
+pooling_layer = MaxPooling2D(pool_size=(1,max_word_len), data_format = 'channels_last')
+reshape_layer = Reshape((max_length,char_emb_size))
+
+single_char_emb = embedding_layer_char(model_input_source_chars)
+conv_output = conv_layer(single_char_emb)
+char_emb = pooling_layer(conv_output)
+char_emb = reshape_layer(char_emb)
+
+"""
+print(embedding_layer_char.input_shape)
+print(embedding_layer_char.output_shape)
+"""
+
 model_input_source = Input(shape = (max_length,), dtype='int32')
 model_input_target = Input(shape = (max_length,), dtype='int32')
 embedding_layer_fixed = Embedding(source_vocab_size, 200, weights = [emb_matrix], trainable=False)
+embedding_layer_trainable = Embedding(input_dim = source_vocab_size, output_dim = 300)
 embedding_layer_target = Embedding(output_dim=30, input_dim=target_vocab_size)
 source_embedding_fixed = embedding_layer_fixed(model_input_source)
+source_embedding_trainable = embedding_layer_trainable(model_input_source)
 target_embedding = embedding_layer_target(model_input_target)
 LSTM_layer= LSTM(latent_dim, return_sequences = True, return_state = True)
-lstm_output, h, c = LSTM_layer(source_embedding_fixed)
+lstm_input = concatenate([source_embedding_fixed, source_embedding_trainable, char_emb])
+dropout_layer_1 = Dropout(0.9)
+lstm_input = dropout_layer_1(lstm_input)
+lstm_output, h, c = LSTM_layer(lstm_input)
 dense_layer = Dense(target_vocab_size, activation='softmax')
 dense_input = concatenate([lstm_output, target_embedding])
+dropout_layer_2 = Dropout(0.9)
+dense_input = dropout_layer_2(dense_input)
 prediction = dense_layer(dense_input)
-model = Model(inputs = [model_input_source, model_input_target], outputs = [prediction])
-optimizer = RMSprop(lr=0.0005)
+model = Model(inputs = [model_input_source, model_input_target, model_input_source_chars], outputs = [prediction])
+optimizer = RMSprop(lr=0.001)
 model.compile(optimizer=optimizer, loss='categorical_crossentropy')
-model.fit([np.array(source_sents_ints), np.array(target_sents_ints_delayed)], [np.array(target_sents_1hot)], batch_size=batch_size, epochs=epochs, validation_split=0.2)
+model.fit([np.array(source_sents_ints), np.array(target_sents_ints_delayed), np.array(source_char_ints)], [np.array(target_sents_1hot)], batch_size=batch_size, epochs=epochs, validation_split=0.2)
 model.save("model.h5")
 
 # defining prediction module
+decoder_char_input = Input(shape=(1,max_word_len))
+decoder_char_single_embedding = embedding_layer_char(decoder_char_input)
+decoder_conv_output = conv_layer(decoder_char_single_embedding)
+decoder_char_emb = pooling_layer(decoder_conv_output)
+decoder_char_reshape_layer = Reshape((1,char_emb_size))
+decoder_char_emb = decoder_char_reshape_layer(decoder_char_emb)
 
 decoder_state_input_h = Input(shape=(latent_dim,))
 decoder_state_input_c = Input(shape=(latent_dim,))
 decoder_word_input = Input(shape=(1,))
 decoder_tag_input = Input(shape=(1,))
-decoder_word_embedding = embedding_layer_fixed(decoder_word_input)
+decoder_word_embedding_fixed = embedding_layer_fixed(decoder_word_input)
+decoder_word_embedding_trainable = embedding_layer_trainable(decoder_word_input)
+decoder_word_embedding_all = concatenate([decoder_word_embedding_fixed, decoder_word_embedding_trainable, decoder_char_emb])
+decoder_word_embedding_all = dropout_layer_1(decoder_word_embedding_all)
 decoder_tag_embedding = embedding_layer_target(decoder_tag_input)
-#decoder_lstm_input = concatenate([decoder_word_embedding,decoder_tag_embedding])
 decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
-decoder_outputs, state_h, state_c = LSTM_layer(decoder_word_embedding, initial_state=decoder_states_inputs)
+decoder_outputs, state_h, state_c = LSTM_layer(decoder_word_embedding_all, initial_state=decoder_states_inputs)
 decoder_states = [state_h, state_c]
 decoder_dense_input = concatenate([decoder_outputs,decoder_tag_embedding])
+decoder_dense_input = dropout_layer_2(decoder_dense_input)
 decoder_dense_outputs = dense_layer(decoder_dense_input)
-decoder_model = Model([decoder_word_input, decoder_tag_input] + decoder_states_inputs,[decoder_dense_outputs] + decoder_states)
+decoder_model = Model([decoder_word_input, decoder_tag_input, decoder_char_input] + decoder_states_inputs,[decoder_dense_outputs] + decoder_states)
 decoder_model.save("decoder.h5")

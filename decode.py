@@ -30,13 +30,15 @@ def sent2tags(sent_index):
 
 def sent2tags(sent_index):
 	input_ints = source_sents_ints[sent_index]
+	char_input_ints = source_char_ints[sent_index]
 	h = np.zeros((1,latent_dim), dtype = "float32")
 	c = np.zeros((1,latent_dim), dtype = "float32")
 	tag_int = np.array([target_vocab["<s>"]])
 	tag_seq = []
 	for i in range(len(input_ints)):
 		word_int = np.array([input_ints[i]])
-		output, h, c = decoder_model.predict([word_int, tag_int, h, c])
+		chars_int = np.array([char_input_ints[i]]).reshape((1,1,max_word_len))
+		output, h, c = decoder_model.predict([word_int, tag_int, chars_int, h, c])
 		tag_ind = np.argmax(output)
 		tag_int = np.array([tag_ind])
 		tag = target_index2word[tag_ind]
@@ -148,6 +150,32 @@ def ints21hot(int_sents, nclasses, max_length):
                         sents_1hot[i,j,int_] = 1.0
         return sents_1hot
 
+def word_ints_2_char_ints(sent_ints, vocab):
+        int2word = dict((index, word) for word, index in vocab.items())
+        word_max_len = max([len(word) for word, index in vocab.items()])
+        new_vocab = {}
+        for word in vocab:
+                new_word = word + "@"*(word_max_len - len(word))
+                new_vocab[new_word] = vocab[word]
+        int2word_new = dict((index, word) for word, index in new_vocab.items())
+        char_vocab = {}
+        i = 0
+        for word in new_vocab.keys():
+                for char in word:
+                        if char not in char_vocab:
+                                char_vocab[char] = i
+                                i += 1
+        char_ints = []
+        for sent_int in sent_ints:
+                all_sent = []
+                for word_int in sent_int:
+                        all_word = []
+                        word = int2word_new[word_int]
+                        for char in word:
+                                all_word.append(char_vocab[char])
+                        all_sent.append(all_word)
+                char_ints.append(all_sent)
+        return (char_ints, word_max_len, char_vocab)
 
 infile_path = "/home/sakakini/adr-detection-parent/large-files/datasets/ADE_NER_All.txt"
 latent_dim = 256
@@ -159,6 +187,8 @@ source_vocab = collect_vocab(source_sents)
 target_vocab = collect_vocab(target_sents)
 source_sents_ints = sents2ints(source_sents, source_vocab)
 target_sents_ints_delayed = sents2ints(target_sents, target_vocab)
+
+(source_char_ints, max_word_len, char_vocab) = word_ints_2_char_ints(source_sents_ints, source_vocab)
 
 target_sents_ints = [sent[1:] for sent in target_sents_ints_delayed]
 target_sents_ints_delayed = [sent[:-1] for sent in target_sents_ints_delayed]
