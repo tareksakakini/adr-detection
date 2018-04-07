@@ -29,7 +29,28 @@ def sent2tags(sent_index):
 """
 
 def sent2tags(sent_index):
-	input_ints = source_sents_ints[sent_index]
+	input_ints = np.array(source_sents_ints[sent_index]).reshape(1, max_length)
+	lstm_states = bidirectional_model.predict(input_ints)
+	tag_int = np.array([target_vocab["<s>"]])
+	tag_seq = []
+	for i in range(max_length):
+		lstm_state = lstm_states[:,i,:].reshape(1,1,latent_dim*2)
+		output = prediction_model.predict([lstm_state, tag_int])
+		tag_ind = np.argmax(output)
+		tag_int = np.array([tag_ind])
+		tag = target_index2word[tag_ind]
+		tag_seq.append(tag)
+		if tag == "<PAD>":
+			break
+	return tag_seq
+		
+		
+
+
+
+
+
+	"""
 	char_input_ints = source_char_ints[sent_index]
 	h = np.zeros((1,latent_dim), dtype = "float32")
 	c = np.zeros((1,latent_dim), dtype = "float32")
@@ -46,6 +67,7 @@ def sent2tags(sent_index):
 		if tag == "<PAD>":
 			break
 	return tag_seq
+	"""
 	 
 def evaluate_full(indices_range, tag_list):
 
@@ -203,6 +225,8 @@ max_length = max([len(x) for x in target_sents_ints])
 target_sents_1hot = ints21hot(target_sents_ints, target_vocab_size + 1, max_length)
 
 decoder_model = load_model("decoder.h5")
+bidirectional_model = load_model("bidirectional.h5")
+prediction_model = load_model("prediction_model.h5")
 
 tag_list = list(target_vocab.keys())
 tag_list.remove('O')

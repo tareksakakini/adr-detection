@@ -135,6 +135,7 @@ max_length = max([len(x) for x in target_sents_ints])
 
 target_sents_1hot = ints21hot(target_sents_ints, target_vocab_size, max_length)
 
+"""
 model_input_source_chars = Input(shape = (max_length, max_word_len), dtype='int32')
 embedding_layer_char = Embedding(char_vocab_size, char_emb_size)
 conv_layer = Conv2D(char_emb_size, window_size, padding='same', activation = 'tanh', data_format = 'channels_last')
@@ -145,6 +146,7 @@ single_char_emb = embedding_layer_char(model_input_source_chars)
 conv_output = conv_layer(single_char_emb)
 char_emb = pooling_layer(conv_output)
 char_emb = reshape_layer(char_emb)
+"""
 
 """
 print(embedding_layer_char.input_shape)
@@ -159,44 +161,37 @@ embedding_layer_target = Embedding(output_dim=30, input_dim=target_vocab_size)
 source_embedding_fixed = embedding_layer_fixed(model_input_source)
 source_embedding_trainable = embedding_layer_trainable(model_input_source)
 target_embedding = embedding_layer_target(model_input_target)
-LSTM_layer= LSTM(latent_dim, return_sequences = True, return_state = True)
-lstm_input = concatenate([source_embedding_fixed, source_embedding_trainable, char_emb])
+LSTM_layer= Bidirectional(LSTM(latent_dim, return_sequences = True))
+#lstm_input = concatenate([source_embedding_fixed, source_embedding_trainable, char_emb])
+lstm_input = concatenate([source_embedding_fixed, source_embedding_trainable])
 dropout_layer_1 = Dropout(0.9)
 lstm_input = dropout_layer_1(lstm_input)
-lstm_output, h, c = LSTM_layer(lstm_input)
+lstm_output = LSTM_layer(lstm_input)
 dense_layer = Dense(target_vocab_size, activation='softmax')
 dense_input = concatenate([lstm_output, target_embedding])
 dropout_layer_2 = Dropout(0.9)
 dense_input = dropout_layer_2(dense_input)
 prediction = dense_layer(dense_input)
-model = Model(inputs = [model_input_source, model_input_target, model_input_source_chars], outputs = [prediction])
+#model = Model(inputs = [model_input_source, model_input_target, model_input_source_chars], outputs = [prediction])
+model = Model(inputs = [model_input_source, model_input_target], outputs = [prediction])
 optimizer = RMSprop(lr=0.001)
 model.compile(optimizer=optimizer, loss='categorical_crossentropy')
-model.fit([np.array(source_sents_ints), np.array(target_sents_ints_delayed), np.array(source_char_ints)], [np.array(target_sents_1hot)], batch_size=batch_size, epochs=epochs, validation_split=0.2)
+#model.fit([np.array(source_sents_ints), np.array(target_sents_ints_delayed), np.array(source_char_ints)], [np.array(target_sents_1hot)], batch_size=batch_size, epochs=epochs, validation_split=0.2)
+model.fit([np.array(source_sents_ints), np.array(target_sents_ints_delayed)], [np.array(target_sents_1hot)], batch_size=batch_size, epochs=epochs, validation_split=0.2)
 model.save("model.h5")
 
-# defining prediction module
-decoder_char_input = Input(shape=(1,max_word_len))
-decoder_char_single_embedding = embedding_layer_char(decoder_char_input)
-decoder_conv_output = conv_layer(decoder_char_single_embedding)
-decoder_char_emb = pooling_layer(decoder_conv_output)
-decoder_char_reshape_layer = Reshape((1,char_emb_size))
-decoder_char_emb = decoder_char_reshape_layer(decoder_char_emb)
+# Define Bidirectional model
 
-decoder_state_input_h = Input(shape=(latent_dim,))
-decoder_state_input_c = Input(shape=(latent_dim,))
-decoder_word_input = Input(shape=(1,))
-decoder_tag_input = Input(shape=(1,))
-decoder_word_embedding_fixed = embedding_layer_fixed(decoder_word_input)
-decoder_word_embedding_trainable = embedding_layer_trainable(decoder_word_input)
-decoder_word_embedding_all = concatenate([decoder_word_embedding_fixed, decoder_word_embedding_trainable, decoder_char_emb])
-decoder_word_embedding_all = dropout_layer_1(decoder_word_embedding_all)
-decoder_tag_embedding = embedding_layer_target(decoder_tag_input)
-decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
-decoder_outputs, state_h, state_c = LSTM_layer(decoder_word_embedding_all, initial_state=decoder_states_inputs)
-decoder_states = [state_h, state_c]
-decoder_dense_input = concatenate([decoder_outputs,decoder_tag_embedding])
-decoder_dense_input = dropout_layer_2(decoder_dense_input)
-decoder_dense_outputs = dense_layer(decoder_dense_input)
-decoder_model = Model([decoder_word_input, decoder_tag_input, decoder_char_input] + decoder_states_inputs,[decoder_dense_outputs] + decoder_states)
-decoder_model.save("decoder.h5")
+model = Model(inputs = [model_input_source], outputs = [lstm_output])
+model.save("bidirectional.h5")
+
+# Define Prediction model
+
+lstm_state = Input(shape = (1,latent_dim*2,), dtype="float32")
+previous_tag = Input(shape = (1,), dtype="int32")
+previous_tag_embedding = embedding_layer_target(previous_tag)
+decoder_dense_input = concatenate([lstm_state, previous_tag_embedding])
+decoder_prediction = dense_layer(decoder_dense_input)
+model = Model(inputs = [lstm_state, previous_tag], outputs = [decoder_prediction])
+model.save("prediction_model.h5") 
+
