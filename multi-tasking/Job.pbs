@@ -1,0 +1,34 @@
+#PBS -l walltime=10:00:00
+
+#PBS -l nodes=nano7:gpus=2
+
+#PBS -N multi-tasking
+
+#PBS -j oe
+
+###PBS -o multi-tasking.out
+
+###PBS -e multi-tasking.err
+
+###PBS -m be
+
+
+######################################
+
+
+
+# Change to the directory from which the batch job was submitted
+
+cd $PBS_O_WORKDIR
+
+
+
+# Assigned the numeric portion of the pbs jobid to a variable
+
+export JOBID=`echo $PBS_JOBID | cut -d"." -f1`
+
+# Run python code and redirect output into a file whose
+
+# name includes the numeric portion of the pbs jobid.
+
+python3 Main.py
