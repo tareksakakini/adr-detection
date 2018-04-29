@@ -125,7 +125,7 @@ def ints21hot(int_sents, nclasses, max_length):
 			sents_1hot[i,j,int_] = 1.0 
 	return sents_1hot
 
-def matricize_data(source_sents, target_sents, source_vocab, target_vocab, target_vocab_specific):
+def matricize_data(source_sents, target_sents, source_vocab, target_vocab_specific):
 	source_sents_ints = sents2ints(source_sents, source_vocab)
 	target_sents_ints_delayed = sents2ints(target_sents, target_vocab_specific)
 	target_sents_ints = [sent[1:] for sent in target_sents_ints_delayed]
@@ -149,7 +149,7 @@ def upsample(source_sents, target_sents, rate):
 wv_model = KeyedVectors.load_word2vec_format('/home/sakakini/adr-detection-parent/large-files/word_vectors/PubMed-and-PMC-w2v.bin', binary=True)
 infile_path_pos = "/home/sakakini/adr-detection-parent/large-files/datasets/craft-2.0/seq2seq-versions/pos-tagging/pos-tagging.txt"
 infile_path_ner = "/home/sakakini/adr-detection-parent/large-files/datasets/ADE/ADE_NER_All.txt"
-latent_dim = 256
+latent_dim = 400
 batch_size = 1000
 epochs = 300
 n_instances = 100000
@@ -173,10 +173,8 @@ source_sents_pos = source_sents_pos[:n_instances]
 target_sents_pos = target_sents_pos[:n_instances]
 
 source_sents = source_sents_ner + source_sents_pos
-target_sents = target_sents_ner + target_sents_pos
 
 source_vocab = collect_vocab(source_sents)
-target_vocab = collect_vocab(target_sents)
 
 target_vocab_pos = collect_vocab(target_sents_pos)
 target_vocab_ner = collect_vocab(target_sents_ner)
@@ -185,10 +183,9 @@ target_vocab_size_pos = len(target_vocab_pos.keys())
 target_vocab_size_ner = len(target_vocab_ner.keys())
 
 source_vocab_size = len(source_vocab.keys())
-target_vocab_size = len(target_vocab.keys())
 
-(max_length_pos, source_sents_ints_pos, target_sents_ints_delayed_pos, target_sents_1hot_pos) = matricize_data(source_sents_pos, target_sents_pos, source_vocab, target_vocab, target_vocab_pos)
-(max_length_ner, source_sents_ints_ner, target_sents_ints_delayed_ner, target_sents_1hot_ner) = matricize_data(source_sents_ner, target_sents_ner, source_vocab, target_vocab, target_vocab_ner)
+(max_length_pos, source_sents_ints_pos, target_sents_ints_delayed_pos, target_sents_1hot_pos) = matricize_data(source_sents_pos, target_sents_pos, source_vocab, target_vocab_pos)
+(max_length_ner, source_sents_ints_ner, target_sents_ints_delayed_ner, target_sents_1hot_ner) = matricize_data(source_sents_ner, target_sents_ner, source_vocab, target_vocab_ner)
 
 emb_matrix = prepare_embedding_matrix(source_vocab)
 
@@ -199,14 +196,15 @@ model_input_target_ner = Input(shape = (max_length_ner,), dtype='int32')
 
 embedding_layer_fixed = Embedding(source_vocab_size, 200, weights = [emb_matrix], trainable=False)
 embedding_layer_trainable = Embedding(input_dim = source_vocab_size, output_dim = 300)
-embedding_layer_target = Embedding(output_dim=30, input_dim=target_vocab_size)
+embedding_layer_target_pos = Embedding(output_dim=30, input_dim=target_vocab_size_pos)
+embedding_layer_target_ner = Embedding(output_dim=30, input_dim=target_vocab_size_ner)
 
 source_embedding_fixed_pos = embedding_layer_fixed(model_input_source_pos)
 source_embedding_trainable_pos = embedding_layer_trainable(model_input_source_pos)
-target_embedding_pos = embedding_layer_target(model_input_target_pos)
+target_embedding_pos = embedding_layer_target_pos(model_input_target_pos)
 source_embedding_fixed_ner = embedding_layer_fixed(model_input_source_ner)
 source_embedding_trainable_ner = embedding_layer_trainable(model_input_source_ner)
-target_embedding_ner = embedding_layer_target(model_input_target_ner)
+target_embedding_ner = embedding_layer_target_ner(model_input_target_ner)
 
 dropout_layer_1 = Dropout(0.9)
 LSTM_layer= Bidirectional(LSTM(latent_dim, return_sequences = True))
@@ -242,7 +240,7 @@ bi_model_ner = Model(inputs = [model_input_source_ner], outputs = [lstm_output_n
 
 lstm_state_ner = Input(shape = (1,latent_dim*2,), dtype="float32")
 previous_tag_ner = Input(shape = (1,), dtype="int32")
-previous_tag_embedding_ner = embedding_layer_target(previous_tag_ner)
+previous_tag_embedding_ner = embedding_layer_target_ner(previous_tag_ner)
 decoder_dense_input_ner = concatenate([lstm_state_ner, previous_tag_embedding_ner])
 decoder_prediction_ner = dense_layer_ner(decoder_dense_input_ner)
 dense_model_ner = Model(inputs = [lstm_state_ner, previous_tag_ner], outputs = [decoder_prediction_ner])
@@ -252,7 +250,7 @@ dense_model_ner = Model(inputs = [lstm_state_ner, previous_tag_ner], outputs = [
 
 lstm_state_pos = Input(shape = (1,latent_dim*2,), dtype="float32")
 previous_tag_pos = Input(shape = (1,), dtype="int32")
-previous_tag_embedding_pos = embedding_layer_target(previous_tag_pos)
+previous_tag_embedding_pos = embedding_layer_target_pos(previous_tag_pos)
 decoder_dense_input_pos = concatenate([lstm_state_pos, previous_tag_embedding_pos])
 decoder_prediction_pos = dense_layer_pos(decoder_dense_input_pos)
 dense_model_pos = Model(inputs = [lstm_state_pos, previous_tag_pos], outputs = [decoder_prediction_pos])
@@ -260,7 +258,7 @@ dense_model_pos = Model(inputs = [lstm_state_pos, previous_tag_pos], outputs = [
 
 gpu_model = multi_gpu_model(full_model, gpus=get_available_gpus())
 optimizer = RMSprop(lr=0.001)
-gpu_model.compile(optimizer=optimizer, loss='categorical_crossentropy', loss_weights=[0.2, 1.0])
+gpu_model.compile(optimizer=optimizer, loss='categorical_crossentropy', loss_weights=[0.2, 1.0], metrics=['accuracy'])
 cbk_full = MyCbk_full(full_model)
 cbk_bi_pos = MyCbk_bi_pos(bi_model_pos)
 cbk_bi_ner = MyCbk_bi_ner(bi_model_ner)

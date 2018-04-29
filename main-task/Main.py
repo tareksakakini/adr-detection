@@ -104,10 +104,10 @@ def word_ints_2_char_ints(sent_ints, vocab):
 	return (char_ints, word_max_len, char_vocab)
 	
 wv_model = KeyedVectors.load_word2vec_format('/home/sakakini/adr-detection-parent/large-files/word_vectors/PubMed-and-PMC-w2v.bin', binary=True)
-infile_path = "/home/sakakini/adr-detection-parent/large-files/datasets/ADE_NER_All.txt"
+infile_path = "/home/sakakini/adr-detection-parent/large-files/datasets/ADE/ADE_NER_All_BIOUL.txt"
 latent_dim = 256
 batch_size = 1000
-epochs = 300
+epochs = 150
 n_instances = 10000
 char_emb_size = 25
 window_size = 7
@@ -162,11 +162,15 @@ source_embedding_fixed = embedding_layer_fixed(model_input_source)
 source_embedding_trainable = embedding_layer_trainable(model_input_source)
 target_embedding = embedding_layer_target(model_input_target)
 LSTM_layer= Bidirectional(LSTM(latent_dim, return_sequences = True))
+LSTM_layer_2= Bidirectional(LSTM(latent_dim, return_sequences = True))
+LSTM_layer_3= Bidirectional(LSTM(latent_dim, return_sequences = True))
 #lstm_input = concatenate([source_embedding_fixed, source_embedding_trainable, char_emb])
 lstm_input = concatenate([source_embedding_fixed, source_embedding_trainable])
 dropout_layer_1 = Dropout(0.9)
 lstm_input = dropout_layer_1(lstm_input)
 lstm_output = LSTM_layer(lstm_input)
+#lstm_output = LSTM_layer_2(lstm_output)
+#lstm_output = LSTM_layer_3(lstm_output)
 dense_layer = Dense(target_vocab_size, activation='softmax')
 dense_input = concatenate([lstm_output, target_embedding])
 dropout_layer_2 = Dropout(0.9)

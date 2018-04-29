@@ -112,7 +112,7 @@ def evaluate(indices_range, tag_list):
 	R = TP/(TP+FN+eps)
 	F = (2*P*R)/(P+R+eps)
 	print(P,R,F)
-
+"""
 def seq2ent(seq):
 	ents = []
 	ent_start_flag = False
@@ -127,6 +127,75 @@ def seq2ent(seq):
 		elif tag == "O" and ent_start_flag:
 			ents.append((ent_type,ent_start,i))
 			ent_start_flag = False
+	return set(ents)
+"""
+
+def seq2ent(seq):
+	ents = []
+	state = "outside"
+	ent_type = None
+	ent_start = 0
+	ent_end = 0
+	for i,tag in enumerate(seq):
+		if state == "outside":
+			if tag in ["B-M"]:
+				state = "in-med"
+				ent_type = "M"
+				ent_start = i
+			elif tag in ["B-R"]:
+				state = "in-rx"
+				ent_type = "R"
+				ent_start = i
+			elif tag in ["U-R","U-M"]:
+				state = "outside"
+				ent_type = tag[-1]
+				ent_start = i
+				ent_end = i+1
+				ents.append((ent_type,ent_start,ent_end))
+			elif tag in ["I-R", "I-M", "O", "L-R", "L-M"]:
+				state = "outside"
+		elif state == "in-med":
+			if tag in ["L-M"]:
+				state = "outside"
+				ent_end = i+1
+				ents.append((ent_type,ent_start,ent_end))
+			elif tag in ["L-R","O","I-R"]:
+				state = "outside"
+			elif tag in ["U-R","U-M"]:
+                                state = "outside"
+                                ent_type = tag[-1]
+                                ent_start = i
+                                ent_end = i+1
+                                ents.append((ent_type,ent_start,ent_end))
+			elif tag in ["B-M"]:
+				state = "in-med"
+				ent_type = "M"
+				ent_start = i
+			elif tag in ["B-R"]:
+				state = "in-rx"
+				ent_type = "R"
+				ent_start = i
+		elif state == "in-rx":
+			if tag in ["L-R"]:
+				state = "outside"
+				ent_end = i+1
+				ents.append((ent_type,ent_start,ent_end))
+			elif tag in ["U-R","U-M"]:
+				state = "outside"
+				ent_type = tag[-1]
+				ent_start = i
+				ent_end = i+1
+				ents.append((ent_type,ent_start,ent_end))
+			elif tag in ["L-M","O","I-M"]:
+				state = "outside"
+			elif tag in ["B-M"]:
+				state = "in-med"
+				ent_type = "M"
+				ent_start = i
+			elif tag in ["B-R"]:
+				state = "in-rx"
+				ent_type = "R"
+				ent_start = i
 	return set(ents)
 	
 def read_data(infile_path):
@@ -199,7 +268,7 @@ def word_ints_2_char_ints(sent_ints, vocab):
                 char_ints.append(all_sent)
         return (char_ints, word_max_len, char_vocab)
 
-infile_path = "/home/sakakini/adr-detection-parent/large-files/datasets/ADE_NER_All.txt"
+infile_path = "/home/sakakini/adr-detection-parent/large-files/datasets/ADE/ADE_NER_All_BIOUL.txt"
 latent_dim = 256
 batch_size = 1000
 epochs = 10

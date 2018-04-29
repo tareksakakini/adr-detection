@@ -1,0 +1,47 @@
+Prologue Args:
+Job ID: 8838.nano
+User ID: sakakini
+Group ID: ece
+---------------------------
+
+2018-04-12 10:43:35.784088: I tensorflow/core/platform/cpu_feature_guard.cc:137] Your CPU supports instructions that this TensorFlow binary was not compiled to use: SSE4.1 SSE4.2 AVX AVX2 FMA
+2018-04-12 10:43:36.094312: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1030] Found device 0 with properties: 
+name: Tesla P100-PCIE-16GB major: 6 minor: 0 memoryClockRate(GHz): 1.3285
+pciBusID: 0000:88:00.0
+totalMemory: 15.90GiB freeMemory: 15.61GiB
+2018-04-12 10:43:36.376791: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1030] Found device 1 with properties: 
+name: Tesla P100-PCIE-16GB major: 6 minor: 0 memoryClockRate(GHz): 1.3285
+pciBusID: 0000:84:00.0
+totalMemory: 15.90GiB freeMemory: 15.61GiB
+2018-04-12 10:43:36.378452: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1045] Device peer to peer matrix
+2018-04-12 10:43:36.378525: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1051] DMA: 0 1 
+2018-04-12 10:43:36.378540: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1061] 0:   Y Y 
+2018-04-12 10:43:36.378549: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1061] 1:   Y Y 
+2018-04-12 10:43:36.378573: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1120] Creating TensorFlow device (/device:GPU:0) -> (device: 0, name: Tesla P100-PCIE-16GB, pci bus id: 0000:88:00.0, compute capability: 6.0)
+2018-04-12 10:43:36.378585: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1120] Creating TensorFlow device (/device:GPU:1) -> (device: 1, name: Tesla P100-PCIE-16GB, pci bus id: 0000:84:00.0, compute capability: 6.0)
+/usr/lib64/python3.4/importlib/_bootstrap.py:321: FutureWarning: Conversion of the second argument of issubdtype from `float` to `np.floating` is deprecated. In future, it will be treated as `np.float64 == np.dtype(float).type`.
+  return f(*args, **kwds)
+Using TensorFlow backend.
+/home/sakakini/my_python3_pkgs/matplotlib/__init__.py:1085: UserWarning: Duplicate key in file "/home/sakakini/.config/matplotlib/matplotlibrc", line #2
+  (fname, cnt))
+/home/sakakini/my_python3_pkgs/matplotlib/__init__.py:1085: UserWarning: Duplicate key in file "/home/sakakini/.config/matplotlib/matplotlibrc", line #3
+  (fname, cnt))
+/home/sakakini/my_python3_pkgs/matplotlib/__init__.py:1085: UserWarning: Duplicate key in file "/home/sakakini/.config/matplotlib/matplotlibrc", line #4
+  (fname, cnt))
+Traceback (most recent call last):
+  File "Main.py", line 243, in <module>
+    previous_tag_embedding_ner = embedding_layer_target(previous_tag_ner)
+NameError: name 'embedding_layer_target' is not defined
+
+---------------------------
+Epilogue Args:
+Job ID: 8838.nano
+User ID: sakakini
+Group ID: ece
+Job Name: multi-tasking
+Session ID: 12012
+Resource List: neednodes=nano7:gpus=2,nodes=nano7:gpus=2,walltime=10:00:00
+Resources Used: cput=00:01:41,energy_used=0,mem=8932932kb,vmem=72757972kb,walltime=00:01:28
+Queue Name: batch
+Account String: 
+
